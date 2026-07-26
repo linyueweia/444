@@ -1,0 +1,94 @@
+name: Build iStoreOS for NanoPC-T4
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 5'  # UTC 每周五 00:00 = 北京时间 08:00
+
+env:
+  TZ: Asia/Shanghai
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Free up disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        docker image prune -a -f
+        sudo apt-get clean
+
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 cmake curl device-tree-compiler ecj fastjar flex g++ gawk gcc-multilib g++-multilib gettext git gnutls-dev gperf haveged intltool lib32gcc-s1 lib32stdc++6 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool llvm-dev lzip nano ncurses-term ninja-build p7zip p7zip-full patch pkgconf python3 python3-pip python3-ply python3-pyelftools python3-setuptools python3-unidecode qemu-utils rsync scons squashfs-tools subversion swig texinfo tree unzip upx-ucl vim wget xmlto xsltproc zlib1g-dev
+
+    - name: Clone iStoreOS source code
+      run: |
+        git clone https://github.com/istoreos/istoreos.git -b istoreos-24.10 openwrt
+
+    - name: Update and install feeds
+      working-directory: openwrt
+      run: |
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Configure target
+      working-directory: openwrt
+      run: |
+        cat > .config << 'EOF'
+        CONFIG_TARGET_rockchip=y
+        CONFIG_TARGET_rockchip_armv8=y
+        CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopc-t4=y
+        CONFIG_PACKAGE_luci=y
+        CONFIG_PACKAGE_luci-base=y
+        CONFIG_PACKAGE_luci-compat=y
+        CONFIG_PACKAGE_luci-lib-ipkg=y
+        CONFIG_PACKAGE_luci-app-firewall=y
+        CONFIG_PACKAGE_luci-app-opkg=y
+        CONFIG_PACKAGE_luci-app-advanced-reboot=y
+        CONFIG_PACKAGE_luci-app-sysupgrade=y
+        CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+        EOF
+        make defconfig
+
+    - name: Download packages
+      working-directory: openwrt
+      run: |
+        make download -j8
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
+
+    - name: Compile firmware
+      working-directory: openwrt
+      run: |
+        make -j$(nproc) || make -j1 || make -j1 V=s
+
+    - name: Organize output
+      working-directory: openwrt
+      run: |
+        mkdir -p output
+        cp -f bin/targets/*/*/*.gz output/ 2>/dev/null || true
+        cp -f bin/targets/*/*/*.img.gz output/ 2>/dev/null || true
+        cd output
+        for f in *; do [ -f "$f" ] && sha256sum "$f" > "${f}.sha256sum"; done
+        ls -lh
+
+    - name: Generate release tag
+      run: |
+        echo "RELEASE_TAG=iStoreOS-NanoPC-T4-$(date -u +%Y%m%d)" >> $GITHUB_ENV
+
+    - name: Upload firmware to Release
+      uses: softprops/action-gh-release@v2
+      if: success()
+      with:
+        tag_name: ${{ env.RELEASE_TAG }}
+        files: openwrt/output/*
+        generate_release_notes: true
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
