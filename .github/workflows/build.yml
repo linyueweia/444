@@ -72,6 +72,21 @@ jobs:
         ENDOFCONFIG
         make defconfig
 
+    - name: Verify only NanoPC-T4 is selected
+      working-directory: openwrt
+      run: |
+        echo "=== Target Profile ==="
+        grep "CONFIG_TARGET_rockchip_armv8_DEVICE" .config || echo "WARNING: No DEVICE config found!"
+        echo ""
+        echo "=== All enabled DEVICE configs ==="
+        grep "CONFIG_TARGET.*_DEVICE.*=y" .config || echo "No devices found"
+        echo ""
+        echo "=== Check if multi-profile ==="
+        grep "CONFIG_TARGET_MULTI_PROFILE" .config || true
+        echo ""
+        echo "=== Package list preview ==="
+        grep "CONFIG_PACKAGE.*=y" .config | head -20
+
     - name: Init ccache
       working-directory: openwrt
       run: |
@@ -95,6 +110,7 @@ jobs:
         cp -f bin/targets/*/*/*.img.gz output/ 2>/dev/null || true
         cd output
         for f in *; do [ -f "$f" ] && sha256sum "$f" > "${f}.sha256sum"; done
+        echo "=== Output files ==="
         ls -lh
 
     - name: Upload firmware to Release
