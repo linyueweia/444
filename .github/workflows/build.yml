@@ -11,6 +11,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/ccache
+
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -28,6 +31,22 @@ jobs:
 
     - name: Clone iStoreOS source code
       run: git clone https://github.com/istoreos/istoreos.git -b istoreos-24.10 openwrt
+
+    - name: Restore downloads cache
+      uses: actions/cache@v4
+      with:
+        path: openwrt/dl
+        key: downloads-${{ github.run_number }}
+        restore-keys: |
+          downloads-
+
+    - name: Restore ccache
+      uses: actions/cache@v4
+      with:
+        path: ccache
+        key: ccache-nanopc-t4-${{ github.run_number }}
+        restore-keys: |
+          ccache-nanopc-t4-
 
     - name: Update and install feeds
       working-directory: openwrt
@@ -51,8 +70,15 @@ jobs:
         CONFIG_PACKAGE_luci-app-advanced-reboot=y
         CONFIG_PACKAGE_luci-app-sysupgrade=y
         CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+        CONFIG_PACKAGE_ccache=y
         ENDOFCONFIG
         make defconfig
+
+    - name: Init ccache
+      working-directory: openwrt
+      run: |
+        mkdir -p $CCACHE_DIR
+        ccache -M 5G
 
     - name: Download packages
       working-directory: openwrt
