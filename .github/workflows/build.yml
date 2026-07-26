@@ -11,8 +11,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    env:
-      CCACHE_DIR: ${{ github.workspace }}/ccache
 
     steps:
     - name: Checkout
@@ -27,7 +25,7 @@ jobs:
     - name: Install build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 cmake curl device-tree-compiler ecj fastjar flex g++ gawk gcc-multilib g++-multilib gettext git gnutls-dev gperf haveged intltool lib32gcc-s1 lib32stdc++6 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool llvm-dev lzip nano ncurses-term ninja-build p7zip p7zip-full patch pkgconf python3 python3-pip python3-ply python3-pyelftools python3-setuptools python3-unidecode qemu-utils rsync scons squashfs-tools subversion swig texinfo tree unzip upx-ucl vim wget xmlto xsltproc zlib1g-dev
+        sudo apt-get install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 cmake curl device-tree-compiler ecj fastjar flex g++ gawk gcc-multilib g++-multilib gettext git gnutls-dev gperf haveged intltool lib32gcc-s1 lib32stdc++6 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool llvm-dev lzip nano ncurses-term ninja-build p7zip p7zip-full patch pkgconf python3 python3-pip python3-ply python3-pyelftools python3-setuptools python3-unidecode qemu-utils rsync scons squashfs-tools subversion swig texinfo tree unzip upx-ucl vim wget xmlto xsltproc zlib1g-dev ccache
 
     - name: Clone iStoreOS source code
       run: git clone https://github.com/istoreos/istoreos.git -b istoreos-24.10 openwrt
@@ -43,7 +41,7 @@ jobs:
     - name: Restore ccache
       uses: actions/cache@v4
       with:
-        path: ccache
+        path: ~/.ccache
         key: ccache-nanopc-t4-${{ github.run_number }}
         restore-keys: |
           ccache-nanopc-t4-
@@ -70,14 +68,14 @@ jobs:
         CONFIG_PACKAGE_luci-app-advanced-reboot=y
         CONFIG_PACKAGE_luci-app-sysupgrade=y
         CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
-        CONFIG_PACKAGE_ccache=y
+        CONFIG_CCACHE=y
         ENDOFCONFIG
         make defconfig
 
     - name: Init ccache
       working-directory: openwrt
       run: |
-        mkdir -p $CCACHE_DIR
+        mkdir -p ~/.ccache
         ccache -M 5G
 
     - name: Download packages
@@ -94,7 +92,6 @@ jobs:
       working-directory: openwrt
       run: |
         mkdir -p output
-        cp -f bin/targets/*/*/*.gz output/ 2>/dev/null || true
         cp -f bin/targets/*/*/*.img.gz output/ 2>/dev/null || true
         cd output
         for f in *; do [ -f "$f" ] && sha256sum "$f" > "${f}.sha256sum"; done
