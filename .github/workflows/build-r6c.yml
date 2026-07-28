@@ -1,4 +1,4 @@
-name: Build iStoreOS for NanoPi R6C
+name: Build iStoreOS for NanoPi R6S
 
 on:
   workflow_dispatch:
@@ -42,9 +42,9 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.ccache
-        key: ccache-nanopi-r6c-${{ github.run_number }}
+        key: ccache-nanopi-r6s-${{ github.run_number }}
         restore-keys: |
-          ccache-nanopi-r6c-
+          ccache-nanopi-r6s-
 
     - name: Update and install feeds
       working-directory: openwrt
@@ -58,7 +58,7 @@ jobs:
         cat > .config << 'ENDOFCONFIG'
         CONFIG_TARGET_rockchip=y
         CONFIG_TARGET_rockchip_armv8=y
-        CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopi-r6c=y
+        CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopi-r6s=y
         CONFIG_PACKAGE_luci=y
         CONFIG_PACKAGE_luci-base=y
         CONFIG_PACKAGE_luci-compat=y
@@ -72,7 +72,7 @@ jobs:
         ENDOFCONFIG
         make defconfig
 
-    - name: Verify only NanoPi R6C is selected
+    - name: Verify only NanoPi R6S is selected
       working-directory: openwrt
       run: |
         echo "=== Target Profile ==="
@@ -117,7 +117,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       if: success()
       with:
-        tag_name: iStoreOS-NanoPi-R6C-${{ github.run_number }}
+        tag_name: iStoreOS-NanoPi-R6S-${{ github.run_number }}
         files: openwrt/output/*
         generate_release_notes: true
         make_latest: true
