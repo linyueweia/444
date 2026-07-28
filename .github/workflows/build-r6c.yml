@@ -1,162 +1,125 @@
 name: Build iStoreOS for NanoPi R6C
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/build-r6c.yml'
   workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * 5'
 
-env:
-  TZ: Asia/Shanghai
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Free up disk space
-        run: |
-          echo "=== Before cleanup ==="
-          df -h
-          sudo rm -rf /usr/local/lib/android /opt/ghc
-          echo "=== After cleanup ==="
-          df -h
+    - name: Free up disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        docker image prune -a -f
+        sudo apt-get clean
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ack antlr3 asciidoc autoconf binutils bison build-essential ccache clang curl device-tree-compiler ecj fastjar flex gawk gettext gcc-multilib g++-multilib git gnutls-dev gperf haveged help2man intltool lib32gcc-s1 libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool libz-dev lrzsz mkisofs msmtp nano ninja-build p7zip p7zip-full patch pkgconf python3 python3-pip python3-ply python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs unzip vim wget xmlto xxd zlib1g-dev
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 cmake curl device-tree-compiler ecj fastjar flex g++ gawk gcc-multilib g++-multilib gettext git gnutls-dev gperf haveged intltool lib32gcc-s1 lib32stdc++6 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool llvm-dev lzip nano ncurses-term ninja-build p7zip p7zip-full patch pkgconf python3 python3-pip python3-ply python3-pyelftools python3-setuptools python3-unidecode qemu-utils rsync scons squashfs-tools subversion swig texinfo tree unzip upx-ucl vim wget xmlto xsltproc zlib1g-dev ccache
 
-      - name: Clone source code
-        run: |
-          cd ${{ github.workspace }}
-          git clone https://github.com/istoreos/istoreos.git -b istoreos-24.10 openwrt
-          cd openwrt
-          git log -1 --oneline
+    - name: Clone iStoreOS source code
+      run: git clone https://github.com/istoreos/istoreos.git -b istoreos-24.10 openwrt
 
-      - name: Update feeds
-        run: |
-          cd ${{ github.workspace }}/openwrt
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
+    - name: Restore downloads cache
+      uses: actions/cache@v4
+      with:
+        path: openwrt/dl
+        key: downloads-${{ github.run_number }}
+        restore-keys: |
+          downloads-
 
-      - name: Configure target (NanoPi R6C)
-        run: |
-          cd ${{ github.workspace }}/openwrt
-          cat > .config << 'CONFIG_EOF'
-CONFIG_TARGET_rockchip=y
-CONFIG_TARGET_rockchip_armv8=y
-CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopi-r6c=y
-CONFIG_PACKAGE_luci-app-sysupgrade=y
-CONFIG_PACKAGE_luci-i18n-sysupgrade-zh-cn=y
-CONFIG_CCACHE=y
-CONFIG_PACKAGE_ca-certificates=y
-CONFIG_PACKAGE_curl=y
-CONFIG_PACKAGE_openssh-sftp-server=y
-CONFIG_PACKAGE_luci-base=y
-CONFIG_PACKAGE_luci-compat=y
-CONFIG_PACKAGE_luci-lib-ipkg=y
-CONFIG_PACKAGE_luci-theme-bootstrap=y
-CONFIG_PACKAGE_luci-theme-argon=y
-CONFIG_PACKAGE_luci-app-firewall=y
-CONFIG_PACKAGE_luci-app-ttyd=y
-CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
-CONFIG_PACKAGE_luci-i18n-firewall-zh-cn=y
-CONFIG_PACKAGE_luci-i18n-ttyd-zh-cn=y
-CONFIG_EOF
-          make defconfig
+    - name: Restore ccache
+      uses: actions/cache@v4
+      with:
+        path: ~/.ccache
+        key: ccache-nanopi-r6c-${{ github.run_number }}
+        restore-keys: |
+          ccache-nanopi-r6c-
 
-      - name: Verify only NanoPi R6C is selected
-        run: |
-          cd ${{ github.workspace }}/openwrt
-          echo "=== Target Profile ==="
-          grep 'CONFIG_TARGET_rockchip_armv8_DEVICE_' .config
-          echo ""
-          echo "=== All enabled DEVICE configs ==="
-          grep 'CONFIG_TARGET_rockchip_armv8_DEVICE_.*=y' .config
-          echo ""
-          echo "=== Check if multi-profile ==="
-          grep 'CONFIG_TARGET_MULTI_PROFILE' .config || echo "CONFIG_TARGET_MULTI_PROFILE is not set"
-          echo ""
-          echo "=== Package list preview ==="
-          grep -E 'CONFIG_PACKAGE_.*=y' .config | head -20
+    - name: Update and install feeds
+      working-directory: openwrt
+      run: |
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
 
-      - name: Cache downloads
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/openwrt/dl
-          key: ${{ runner.os }}-r6c-dl-${{ github.run_number }}
-          restore-keys: |
-            ${{ runner.os }}-r6c-dl-
+    - name: Configure target
+      working-directory: openwrt
+      run: |
+        cat > .config << 'ENDOFCONFIG'
+        CONFIG_TARGET_rockchip=y
+        CONFIG_TARGET_rockchip_armv8=y
+        CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopi-r6c=y
+        CONFIG_PACKAGE_luci=y
+        CONFIG_PACKAGE_luci-base=y
+        CONFIG_PACKAGE_luci-compat=y
+        CONFIG_PACKAGE_luci-lib-ipkg=y
+        CONFIG_PACKAGE_luci-app-firewall=y
+        CONFIG_PACKAGE_luci-app-opkg=y
+        CONFIG_PACKAGE_luci-app-advanced-reboot=y
+        CONFIG_PACKAGE_luci-app-sysupgrade=y
+        CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
+        CONFIG_CCACHE=y
+        ENDOFCONFIG
+        make defconfig
 
-      - name: Cache ccache
-        uses: actions/cache@v4
-        with:
-          path: ~/.ccache
-          key: ${{ runner.os }}-r6c-ccache-${{ github.run_number }}
-          restore-keys: |
-            ${{ runner.os }}-r6c-ccache-
+    - name: Verify only NanoPi R6C is selected
+      working-directory: openwrt
+      run: |
+        echo "=== Target Profile ==="
+        grep "CONFIG_TARGET_rockchip_armv8_DEVICE" .config || echo "WARNING: No DEVICE config found!"
+        echo ""
+        echo "=== All enabled DEVICE configs ==="
+        grep "CONFIG_TARGET.*_DEVICE.*=y" .config || echo "No devices found"
+        echo ""
+        echo "=== Check if multi-profile ==="
+        grep "CONFIG_TARGET_MULTI_PROFILE" .config || true
+        echo ""
+        echo "=== Package list preview ==="
+        grep "CONFIG_PACKAGE.*=y" .config | head -20
 
-      - name: Download packages
-        run: |
-          cd ${{ github.workspace }}/openwrt
-          make download -j$(nproc)
-          find dl -size -1024c -exec ls -l {} \;
-          find dl -size -1024c -delete
+    - name: Init ccache
+      working-directory: openwrt
+      run: |
+        mkdir -p ~/.ccache
+        ccache -M 5G
 
-      - name: Compile firmware
-        run: |
-          cd ${{ github.workspace }}/openwrt
-          echo "Compiling with -j$(nproc)..."
-          make -j$(nproc) || make -j1 V=s
-          echo "Compile finished!"
+    - name: Download packages
+      working-directory: openwrt
+      run: |
+        make download -j8
+        find dl -size -1024c -exec rm -f {} \;
 
-      - name: Organize output files
-        run: |
-          cd ${{ github.workspace }}/openwrt
-          echo "=== Output files ==="
-          find bin/targets -name "*.img.gz" 2>/dev/null | head -20
-          ls -lh bin/targets/rockchip/armv8/
+    - name: Compile firmware
+      working-directory: openwrt
+      run: make -j$(nproc) || make -j1 V=s
 
-      - name: Generate release info
-        id: release_info
-        run: |
-          cd ${{ github.workspace }}/openwrt
-          COMMIT_HASH=$(git -C openwrt rev-parse --short HEAD)
-          echo "commit_hash=${COMMIT_HASH}" >> $GITHUB_OUTPUT
-          echo "commit_hash=${COMMIT_HASH}"
+    - name: Organize output
+      working-directory: openwrt
+      run: |
+        mkdir -p output
+        cp -f bin/targets/*/*/*.img.gz output/ 2>/dev/null || true
+        cd output
+        for f in *; do [ -f "$f" ] && sha256sum "$f" > "${f}.sha256sum"; done
+        echo "=== Output files ==="
+        ls -lh
 
-      - name: Create Release and Upload Firmware
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.0.0-r6c-${{ github.run_number }}
-          name: "iStoreOS NanoPi R6C Build #${{ github.run_number }}"
-          body: |
-            ## iStoreOS for NanoPi R6C
-
-            **Source:** https://github.com/istoreos/istoreos/tree/istoreos-24.10
-            **Target Device:** NanoPi R6C (RK3588S)
-            **Commit:** ${{ steps.release_info.outputs.commit_hash }}
-            **Build Time:** $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
-
-            ### 默认配置
-            - 默认 IP: 192.168.100.1
-            - 用户名: root
-            - 密码: 空
-
-            ### 包含功能
-            - LuCI Web 管理界面
-            - 在线升级 (luci-app-sysupgrade)
-            - 中文语言包
-            - SSH 服务
-          files: |
-            openwrt/bin/targets/rockchip/armv8/*.img.gz
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload firmware to Release
+      uses: softprops/action-gh-release@v2
+      if: success()
+      with:
+        tag_name: iStoreOS-NanoPi-R6C-${{ github.run_number }}
+        files: openwrt/output/*
+        generate_release_notes: true
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
