@@ -1,4 +1,4 @@
-name: Build iStoreOS Firmware (NanoPi R6C)
+name: Build iStoreOS for NanoPi R6C
 
 on:
   push:
