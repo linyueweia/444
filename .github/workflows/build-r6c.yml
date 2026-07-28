@@ -69,6 +69,7 @@ jobs:
         CONFIG_PACKAGE_luci-app-sysupgrade=y
         CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
         CONFIG_CCACHE=y
+        CONFIG_TARGET_KERNEL_PARTSIZE=32
         ENDOFCONFIG
         make defconfig
 
