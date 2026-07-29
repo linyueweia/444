@@ -52,6 +52,11 @@ jobs:
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
+    - name: Clone extra packages (eqos plus)
+      working-directory: openwrt
+      run: |
+        git clone --depth=1 https://github.com/sirpdboy/luci-app-eqosplus package/luci-app-eqosplus
+
     - name: Configure target
       working-directory: openwrt
       run: |
@@ -67,6 +72,8 @@ jobs:
         CONFIG_PACKAGE_luci-app-opkg=y
         CONFIG_PACKAGE_luci-app-advanced-reboot=y
         CONFIG_PACKAGE_luci-app-sysupgrade=y
+        CONFIG_PACKAGE_luci-app-eqosplus=y
+        CONFIG_PACKAGE_luci-i18n-eqosplus-zh-cn=y
         CONFIG_PACKAGE_luci-i18n-base-zh-cn=y
         CONFIG_CCACHE=y
         ENDOFCONFIG
