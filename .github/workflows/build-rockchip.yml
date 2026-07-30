@@ -1,4 +1,4 @@
-name: Build x86_64
+name: Build rockchip/armv8 (R6S / H88K / T4)
 
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
         run: git clone --depth=1 $REPO_URL -b $REPO_BRANCH /opt/istoreos
 
       - name: Copy config
-        run: cp $GITHUB_WORKSPACE/configs/x86.config /opt/istoreos/.config
+        run: cp $GITHUB_WORKSPACE/configs/rockchip.config /opt/istoreos/.config
 
       - name: Install build dependencies
         run: |
@@ -31,6 +31,8 @@ jobs:
         working-directory: /opt/istoreos
         run: |
           cat >> feeds.conf << 'FEEDEOF'
+          src-git h69k_oled https://github.com/jjm2473/luci-app-oled.git;master
+          src-git lcdsimple https://github.com/jjm2473/lcdsimple.git;main
           src-git third_party https://github.com/linkease/istore-packages.git;main
           src-git diskman https://github.com/jjm2473/luci-app-diskman.git;dev
           src-git oaf https://github.com/jjm2473/OpenAppFilter.git;dev7
@@ -62,6 +64,6 @@ jobs:
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
-          name: x86_64-firmware
-          path: /opt/istoreos/bin/targets/x86/64/*squashfs*img.gz
+          name: rockchip-firmware
+          path: /opt/istoreos/bin/targets/rockchip/armv8/*squashfs*img.gz
           if-no-files-found: error
