@@ -111,7 +111,7 @@ jobs:
       working-directory: openwrt
       run: |
         mkdir -p output
-        cp -f bin/targets/*/*/*.img.gz output/ 2>/dev/null || true
+        cp -f bin/targets/*/*/*squashfs*img.gz output/ 2>/dev/null || true
         cd output
         for f in *; do [ -f "$f" ] && sha256sum "$f" > "${f}.sha256sum"; done
         echo "=== Output files ==="
