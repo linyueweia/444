@@ -52,6 +52,10 @@ jobs:
         working-directory: /opt/istoreos
         run: make defconfig
 
+      - name: Fix config - disable broken packages
+        working-directory: /opt/istoreos
+        run: sed -i '/CONFIG_PACKAGE_inter_i40e=y/c\# CONFIG_PACKAGE_inter_i40e is not set' .config
+
       - name: Download source
         working-directory: /opt/istoreos
         run: make -j$(nproc) download
