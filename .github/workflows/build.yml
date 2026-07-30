@@ -57,6 +57,12 @@ jobs:
       run: |
         git clone --depth=1 https://github.com/sirpdboy/luci-app-eqosplus package/luci-app-eqosplus
 
+    - name: Move uhttpd to port 81 (for nginx)
+      working-directory: openwrt
+      run: |
+        sed -i "s/:80/:81/g" package/network/services/uhttpd/files/uhttpd.config
+        sed -i "s/:443/:4443/g" package/network/services/uhttpd/files/uhttpd.config
+
     - name: Configure target
       working-directory: openwrt
       run: |
