@@ -8,28 +8,47 @@ on:
 env:
   REPO_URL: https://github.com/istoreos/istoreos.git
   REPO_BRANCH: istoreos-24.10
+  CONFIG_FILE: .config
+  WORK_DIR: /mnt/workdir
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout configs
         uses: actions/checkout@v4
 
-      - name: Clone iStoreOS source
-        run: git clone --depth=1 $REPO_URL -b $REPO_BRANCH /opt/istoreos
-
-      - name: Copy config
-        run: cp $GITHUB_WORKSPACE/configs/rockchip.config /opt/istoreos/.config
-
-      - name: Install build dependencies
+      - name: 初始化编译环境
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential clang flex bison g++ gawk gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev python3-setuptools python3-pip rsync swig unzip zlib1g-dev file wget
-          sudo pip3 install pyelftools
+          sudo -E apt-get -qq update
+          sudo -E apt-get -qq install build-essential clang flex g++ gawk gcc-multilib gettext git libncurses5-dev libssl-dev rsync unzip zlib1g-dev swig libpython3-dev python3 python3-pip python3-venv python3-dev aria2 jq subversion qemu-utils ccache rename libelf-dev
+          sudo python3 -m pip install --break-system-packages pyelftools
+          echo "------------------------------- 清理Docker镜像和软件 -------------------------------"
+          docker images -q | xargs -r docker rmi 2>/dev/null || true
+          sudo -E apt-get -y purge azure-cli ghc* zulu* hhvm llvm* firefox google* dotnet* powershell openjdk* adoptopenjdk* mysql* php* mongodb* dotnet* moby* snapd* android* || true
+          sudo -E apt-get -qq autoremove --purge
+          sudo -E apt-get -qq clean
+          echo "------------------------------- 设置工作目录 -------------------------------"
+          sudo mkdir -p /mnt/workdir
+          sudo chown $USER:$GROUPS /mnt/workdir
 
-      - name: Add extra feeds
-        working-directory: /opt/istoreos
+      - name: 克隆源码
+        working-directory: /mnt/workdir
+        run: |
+          git clone $REPO_URL -b $REPO_BRANCH openwrt
+          ln -sf /mnt/workdir/openwrt $GITHUB_WORKSPACE/openwrt
+
+      - name: 缓存构建动作
+        uses: klever1988/cachewrtbuild@main
+        with:
+          ccache: 'true'
+          mixkey: ubuntu-24.04-rk35xx-24.10-istoreos-24.10
+          prefix: ${{ github.workspace }}/openwrt
+
+      - name: 添加额外 feeds
+        working-directory: /mnt/workdir/openwrt
         run: |
           cat >> feeds.conf << 'FEEDEOF'
           src-git h69k_oled https://github.com/jjm2473/luci-app-oled.git;master
@@ -42,29 +61,39 @@ jobs:
           src-git jjm2473_apps https://github.com/jjm2473/openwrt-apps.git;main
           FEEDEOF
 
-      - name: Update and install feeds
-        working-directory: /opt/istoreos
-        run: ./scripts/feeds update -a && ./scripts/feeds install -a
+      - name: 更新 feeds
+        working-directory: /mnt/workdir/openwrt
+        run: ./scripts/feeds update -a
 
-      - name: Add eqosplus
-        working-directory: /opt/istoreos
+      - name: 安装 feeds
+        working-directory: /mnt/workdir/openwrt
+        run: ./scripts/feeds install -a
+
+      - name: 添加 eqosplus
+        working-directory: /mnt/workdir/openwrt
         run: git clone https://github.com/sirpdboy/luci-app-eqosplus.git package/luci-app-eqosplus
 
-      - name: Configure
-        working-directory: /opt/istoreos
-        run: make defconfig
+      - name: 加载自定义配置
+        working-directory: /mnt/workdir/openwrt
+        run: cp $GITHUB_WORKSPACE/configs/rockchip.config .config
 
-      - name: Download source
-        working-directory: /opt/istoreos
-        run: make -j$(nproc) download
+      - name: 下载软件包
+        working-directory: /mnt/workdir/openwrt
+        run: |
+          make defconfig
+          make download -j8
+          find dl -size -1024c -exec ls -l {} \;
+          find dl -size -1024c -exec rm -f {} \;
 
-      - name: Build
-        working-directory: /opt/istoreos
-        run: make -j$(nproc) || make -j1 V=s
+      - name: 编译固件
+        working-directory: /mnt/workdir/openwrt
+        run: |
+          echo -e "$(nproc) thread compile"
+          make -j$(nproc) || make -j1 || make -j1 V=s
 
-      - name: Upload firmware
+      - name: 上传固件
         uses: actions/upload-artifact@v4
         with:
           name: rockchip-firmware
-          path: /opt/istoreos/bin/targets/rockchip/armv8/*squashfs*img.gz
+          path: /mnt/workdir/openwrt/bin/targets/rockchip/armv8/*squashfs*img.gz
           if-no-files-found: error
