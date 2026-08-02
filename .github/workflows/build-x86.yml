@@ -12,6 +12,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@main
@@ -83,3 +85,17 @@ jobs:
           name: x86_64-firmware
           path: openwrt/bin/targets/x86/64/*squashfs*img.gz
           if-no-files-found: error
+
+      - name: Stage release file
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/release
+          cp openwrt/bin/targets/x86/64/istoreos-x86-64-generic-squashfs-combined.img.gz $GITHUB_WORKSPACE/release/
+
+      - name: Upload to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          f=istoreos-x86-64-generic-squashfs-combined.img.gz
+          N=$(gh release list --limit 100 --json tagName -q '.[].tagName' | grep '^iStoreOS-X86_64-' | grep -oE '[0-9]+$' | sort -n | tail -1)
+          N=$((N+1))
+          gh release create "iStoreOS-X86_64-$N" "$GITHUB_WORKSPACE/release/$f" --title "iStoreOS-X86_64-$N" --notes "iStoreOS 24.10 x86_64 固件 $(date '+%Y%m%d%H')"

@@ -12,6 +12,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@main
@@ -83,3 +85,24 @@ jobs:
           name: rockchip-firmware
           path: openwrt/bin/targets/rockchip/armv8/*squashfs*img.gz
           if-no-files-found: error
+
+      - name: Stage release files
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/release
+          cp openwrt/bin/targets/rockchip/armv8/istoreos-rockchip-armv8-friendlyarm_nanopi-r6s-squashfs-sysupgrade.img.gz $GITHUB_WORKSPACE/release/
+          cp openwrt/bin/targets/rockchip/armv8/istoreos-rockchip-armv8-hinlink_h88k-squashfs-sysupgrade.img.gz $GITHUB_WORKSPACE/release/
+
+      - name: Upload to Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          entries=(
+            "istoreos-rockchip-armv8-friendlyarm_nanopi-r6s-squashfs-sysupgrade.img.gz|NanoPi-R6S"
+            "istoreos-rockchip-armv8-hinlink_h88k-squashfs-sysupgrade.img.gz|H88K"
+          )
+          for e in "${entries[@]}"; do
+            f="${e%%|*}"; name="${e##*|}"
+            N=$(gh release list --limit 100 --json tagName -q '.[].tagName' | grep "^iStoreOS-$name-" | grep -oE '[0-9]+$' | sort -n | tail -1)
+            N=$((N+1))
+            gh release create "iStoreOS-$name-$N" "$GITHUB_WORKSPACE/release/$f" --title "iStoreOS-$name-$N" --notes "iStoreOS 24.10 $name 固件 $(date '+%Y%m%d%H')"
+          done
